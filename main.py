@@ -37,8 +37,7 @@ model = joblib.load(os.path.join(BASE, "model", "model.pkl"))
 # -----------------------------
 WHITE_MEAT_LIST = ["chicken", "shrimp", "salmon","fish", "turkey"]
 RED_MEAT_LIST   = ["beef", "pork", "meat", "sausage", "hamburger"]
-DAIRY_LIST     = ["paneer", "ricotta", "gorgonzola", "cheese", "pizza", "milk", "yogurt", "ice cream", "cake", "chocolate", "mozzerella", "chedder", "colby jack", "pepper jack", "gouda", "colby pepper jack", "parmesan", "feta", "Prosciutto
-", "sour cream", "whipped cream"]
+DAIRY_LIST     = ["paneer", "ricotta", "gorgonzola", "cheese", "pizza", "milk", "yogurt", "ice cream", "cake", "chocolate", "mozzerella", "chedder", "colby jack", "pepper jack", "gouda", "colby pepper jack", "parmesan", "feta", "Prosciutto", "sour cream", "whipped cream"]
 
 # -----------------------------
 # Pydantic Models
@@ -86,6 +85,12 @@ def diet_filter(df, diet):
 # -----------------------------
 def apply_rules(df, user):
     df = diet_filter(df, user.diet)
+
+    pref = (getattr(user, "store_preference", "") or "").strip().lower()
+
+    if pref and pref not in ("any", "no preference", "none"):
+        if "store" in df.columns:
+            df = df[df["store"].str.lower().str.contains(pref, na=False)]
 
     if user.restrict_low_sodium:
         df = df[df["sodium_mg"] <= 300]
@@ -206,6 +211,8 @@ def plan_week(ranked, user):
                 "fiber_g": float(x["fiber_g"]),
                 "added_sugar_g": float(x["added_sugar_g"]),
                 "predicted_glycemic_impact": float(x["predicted_glycemic_impact"]),
+                "store": str(x.get("store", "")),
+
             })
 
         # rotate using concat

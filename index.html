@@ -194,6 +194,7 @@ async function generatePlan() {
                 <div class="grocery-item">
                     <b>${item.item}</b><br>
                     <span class="small-text">Category: ${item.category}</span><br>
+                    <span class="small-text">Store: ${item.store}</span><br>` : ""}
                     <span class="small-text">Price per Serving: $${item.price_per_serving.toFixed(2)}</span><br>
                     <span class="small-text">Carbs: ${item.carbs_g} g | Protein: ${item.protein_g} g | Fiber: ${item.fiber_g} g</span><br>
                     <span class="small-text">Added Sugar: ${item.added_sugar_g} g</span><br>
@@ -210,4 +211,5 @@ async function generatePlan() {
 </body>
 
 </html>
+
 
