@@ -125,6 +125,7 @@
 
 <script>
 async function generatePlan() {
+    const storePreferenceRaw = document.getElementById("store").value.trim();
     const payload = {
         user: {
             budget: Number(document.getElementById("budget").value),
@@ -137,6 +138,7 @@ async function generatePlan() {
             activity: 0,
             restrict_low_sodium: true,
             location: "Atlanta, GA"
+            store_preference: storePreferenceRaw === "" ? "any" : storePreferenceRaw
         }
     };
 
@@ -208,3 +210,4 @@ async function generatePlan() {
 </body>
 
 </html>
+
