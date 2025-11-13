@@ -41,6 +41,7 @@
         border: 1px solid #ccc;
         margin-top: 5px;
         margin-bottom: 15px;
+        box-sizing: border-box;
     }
 
     button {
@@ -88,6 +89,11 @@
         color: #555;
         font-size: 14px;
     }
+
+    .error {
+        color: red;
+        margin-top: 15px;
+    }
 </style>
 </head>
 
@@ -102,7 +108,7 @@
     <input id="people" type="number" value="1" />
 
     <label>Preferred Store (optional)</label>
-    <input id="store" type="text" placeholder="e.g., Sprouts, Walmart, Any" />
+    <input id="store" type="text" placeholder="e.g., Sprouts, Trader Joe's, Any" />
 
     <label>Diet Preference</label>
     <select id="diet">
@@ -125,7 +131,11 @@
 
 <script>
 async function generatePlan() {
+    const resultsDiv = document.getElementById("results");
+    resultsDiv.innerHTML = "";
+
     const storePreferenceRaw = document.getElementById("store").value.trim();
+
     const payload = {
         user: {
             budget: Number(document.getElementById("budget").value),
@@ -137,7 +147,7 @@ async function generatePlan() {
             weight_kg: 75,
             activity: 0,
             restrict_low_sodium: true,
-            location: "Atlanta, GA"
+            location: "Atlanta, GA",
             store_preference: storePreferenceRaw === "" ? "any" : storePreferenceRaw
         }
     };
@@ -150,14 +160,14 @@ async function generatePlan() {
             body: JSON.stringify(payload),
         });
     } catch (err) {
-        document.getElementById("results").innerHTML =
-            "<p style='color:red;'>Failed to reach backend. Run Uvicorn.</p>";
+        resultsDiv.innerHTML =
+            "<p class='error'>Failed to reach backend. Make sure Uvicorn is running.</p>";
         return;
     }
 
     if (!res.ok) {
-        document.getElementById("results").innerHTML =
-            "<p style='color:red;'>Server returned an error.</p>";
+        resultsDiv.innerHTML =
+            "<p class='error'>Server returned an error.</p>";
         return;
     }
 
@@ -165,7 +175,7 @@ async function generatePlan() {
 
     let html = `
         <h2 class="section-title">Budget Used</h2>
-        <p><b>$${data.budget_used}</b> / ${payload.user.budget}</p>
+        <p><b>$${data.budget_used.toFixed(2)}</b> / ${payload.user.budget}</p>
 
         <h2 class="section-title">7-Day Meal Plan</h2>
     `;
@@ -194,7 +204,7 @@ async function generatePlan() {
                 <div class="grocery-item">
                     <b>${item.item}</b><br>
                     <span class="small-text">Category: ${item.category}</span><br>
-                    <span class="small-text">Store: ${item.store}</span><br>` : ""}
+                    ${item.store ? `<span class="small-text">Store: ${item.store}</span><br>` : ""}
                     <span class="small-text">Price per Serving: $${item.price_per_serving.toFixed(2)}</span><br>
                     <span class="small-text">Carbs: ${item.carbs_g} g | Protein: ${item.protein_g} g | Fiber: ${item.fiber_g} g</span><br>
                     <span class="small-text">Added Sugar: ${item.added_sugar_g} g</span><br>
@@ -204,12 +214,9 @@ async function generatePlan() {
         }
     });
 
-    document.getElementById("results").innerHTML = html;
+    resultsDiv.innerHTML = html;
 }
 </script>
 
 </body>
-
 </html>
-
-
