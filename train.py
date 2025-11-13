@@ -1,4 +1,4 @@
-# this is commit number 1
+# this is commit number 3
 # train.py — scientifically grounded glycemic-impact model
 import os
 import json
@@ -122,3 +122,4 @@ with open(os.path.join(model_dir, "metrics.json"), "w") as f:
 print("Training complete.")
 
 print("R2 =", r2)
+
