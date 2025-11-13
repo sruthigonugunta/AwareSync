@@ -35,9 +35,9 @@ model = joblib.load(os.path.join(BASE, "model", "model.pkl"))
 # -----------------------------
 # Diet lists
 # -----------------------------
-WHITE_MEAT_LIST = ["chicken", "shrimp", "salmon","fish"]
-RED_MEAT_LIST   = ["beef", "pork"]
-CHEESE_LIST     = ["paneer", "ricotta", "gorgonzola", "cheese", "ravioli", "tortelloni"]
+WHITE_MEAT_LIST = ["chicken", "shrimp", "salmon","fish", "turkey"]
+RED_MEAT_LIST   = ["beef", "pork", "meat", "sausage", "hamburger"]
+DAIRY_LIST     = ["paneer", "ricotta", "gorgonzola", "cheese", "pizza", "milk", "yogurt", "ice cream", "cake", "chocolate", "mozzerella", "chedder", "colby jack", "pepper jack", "gouda", "colby pepper jack", "parmesan", "feta", "Prosciutto", "sour cream", "whipped cream"]
 
 # -----------------------------
 # Pydantic Models
@@ -246,7 +246,6 @@ def recommend(req: Request):
         "meals": meals,
 
     }
-
 
 
 
