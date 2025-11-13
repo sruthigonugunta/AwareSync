@@ -86,6 +86,12 @@ def diet_filter(df, diet):
 def apply_rules(df, user):
     df = diet_filter(df, user.diet)
 
+    pref = (getattr(user, "store_preference", "") or "").strip().lower()
+
+    if pref and pref not in ("any", "no preference", "none"):
+        if "store" in df.columns:
+            df = df[df["store"].str.lower().str.contains(pref, na=False)]
+
     if user.restrict_low_sodium:
         df = df[df["sodium_mg"] <= 300]
 
@@ -238,5 +244,6 @@ def recommend(req: Request):
         "meals": meals,
 
     }
+
 
 
