@@ -1,3 +1,4 @@
+# this is commit number 1
 # train.py — scientifically grounded glycemic-impact model
 import os
 import json
@@ -119,4 +120,5 @@ with open(os.path.join(model_dir, "metrics.json"), "w") as f:
     json.dump({"r2": float(r2), "train": len(X_train), "test": len(X_test)}, f)
 
 print("Training complete.")
+
 print("R2 =", r2)
