@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AwareSync Meal Planner</title>
+
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        background: #f4f7fa;
+        margin: 0;
+        padding: 0;
+    }
+
+    .container {
+        max-width: 800px;
+        margin: 40px auto;
+        padding: 25px;
+        background: white;
+        border-radius: 14px;
+        box-shadow: 0 4px 14px rgba(0,0,0,0.12);
+    }
+
+    h1 {
+        text-align: center;
+        margin-bottom: 25px;
+        color: #0a4d8c;
+    }
+
+    label {
+        font-weight: bold;
+        margin-top: 10px;
+        display: block;
+    }
+
+    input, select {
+        width: 100%;
+        padding: 10px;
+        border-radius: 8px;
+        border: 1px solid #ccc;
+        margin-top: 5px;
+        margin-bottom: 15px;
+    }
+
+    button {
+        width: 100%;
+        padding: 14px;
+        border: none;
+        border-radius: 10px;
+        font-size: 18px;
+        background-color: #0a4d8c;
+        color: white;
+        cursor: pointer;
+        margin-top: 10px;
+        font-weight: bold;
+    }
+
+    button:hover {
+        background-color: #0c5aa3;
+    }
+
+    .section-title {
+        margin-top: 35px;
+        font-size: 22px;
+        font-weight: bold;
+        color: #0a4d8c;
+        border-bottom: 2px solid #0a4d8c;
+        padding-bottom: 6px;
+    }
+
+    .meal-box, .grocery-item {
+        background: #f0f6ff;
+        padding: 12px;
+        border-radius: 10px;
+        margin-bottom: 10px;
+    }
+
+    .meal-header {
+        font-size: 18px;
+        font-weight: bold;
+        color: #084a80;
+    }
+
+    .meal-items { margin-left: 15px; }
+
+    .small-text {
+        color: #555;
+        font-size: 14px;
+    }
+</style>
+</head>
+
+<body>
+<div class="container">
+    <h1>AwareSync Meal Planner</h1>
+
+    <label>Weekly Budget ($)</label>
+    <input id="budget" type="number" value="60" />
+
+    <label>People in Household</label>
+    <input id="people" type="number" value="1" />
+
+    <label>Diet Preference</label>
+    <select id="diet">
+        <option value="any">Any</option>
+        <option value="vegetarian">Vegetarian</option>
+        <option value="vegan">Vegan</option>
+        <option value="white_meat_only">White Meat Only</option>
+    </select>
+
+    <label>Max Added Sugar per Meal (g)</label>
+    <input id="max_added_sugar_g" type="number" value="8" />
+
+    <label>Target Carbs per Meal (g)</label>
+    <input id="target_carbs_per_meal_g" type="number" value="45" />
+
+    <button onclick="generatePlan()">Generate 7-Day Plan</button>
+
+    <div id="results"></div>
+</div>
+
+<script>
+async function generatePlan() {
+    const payload = {
+        user: {
+            budget: Number(document.getElementById("budget").value),
+            people: Number(document.getElementById("people").value),
+            diet: document.getElementById("diet").value,
+            max_added_sugar_g: Number(document.getElementById("max_added_sugar_g").value),
+            target_carbs_per_meal_g: Number(document.getElementById("target_carbs_per_meal_g").value),
+            height_cm: 168,
+            weight_kg: 75,
+            activity: 0,
+            restrict_low_sodium: true,
+            location: "Atlanta, GA"
+        }
+    };
+
+    let res;
+    try {
+        res = await fetch("http://127.0.0.1:8000/recommend", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+        });
+    } catch (err) {
+        document.getElementById("results").innerHTML =
+            "<p style='color:red;'>Failed to reach backend. Run Uvicorn.</p>";
+        return;
+    }
+
+    if (!res.ok) {
+        document.getElementById("results").innerHTML =
+            "<p style='color:red;'>Server returned an error.</p>";
+        return;
+    }
+
+    const data = await res.json();
+
+    let html = `
+        <h2 class="section-title">Budget Used</h2>
+        <p><b>$${data.budget_used}</b> / ${payload.user.budget}</p>
+
+        <h2 class="section-title">7-Day Meal Plan</h2>
+    `;
+
+    data.meals.forEach(day => {
+        html += `
+            <div class="meal-box">
+                <div class="meal-header">Day ${day.day}</div>
+                <div class="meal-items small-text">
+                    <b>Breakfast:</b> ${day.breakfast.join(", ")}<br>
+                    <b>Lunch:</b> ${day.lunch.join(", ")}<br>
+                    <b>Dinner:</b> ${day.dinner.join(", ")}
+                </div>
+            </div>
+        `;
+    });
+
+    html += `<h2 class="section-title">Grocery List</h2>`;
+
+    let seen = new Set();
+    data.items.forEach(item => {
+        const key = item.item.toLowerCase();
+        if (!seen.has(key)) {
+            seen.add(key);
+            html += `
+                <div class="grocery-item">
+                    <b>${item.item}</b><br>
+                    <span class="small-text">Category: ${item.category}</span><br>
+                    <span class="small-text">Price per Serving: $${item.price_per_serving.toFixed(2)}</span><br>
+                    <span class="small-text">Carbs: ${item.carbs_g} g | Protein: ${item.protein_g} g | Fiber: ${item.fiber_g} g</span><br>
+                    <span class="small-text">Added Sugar: ${item.added_sugar_g} g</span><br>
+                    <span class="small-text">Glycemic Impact: ${item.predicted_glycemic_impact.toFixed(2)}</span>
+                </div>
+            `;
+        }
+    });
+
+    document.getElementById("results").innerHTML = html;
+}
+</script>
+
+</body>
+</html>
