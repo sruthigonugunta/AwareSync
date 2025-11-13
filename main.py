@@ -35,7 +35,7 @@ model = joblib.load(os.path.join(BASE, "model", "model.pkl"))
 # -----------------------------
 # Diet lists
 # -----------------------------
-WHITE_MEAT_LIST = ["chicken", "shrimp", "salmon"]
+WHITE_MEAT_LIST = ["chicken", "shrimp", "salmon","fish"]
 RED_MEAT_LIST   = ["beef", "pork"]
 CHEESE_LIST     = ["paneer", "ricotta", "gorgonzola", "cheese", "ravioli", "tortelloni"]
 
@@ -236,3 +236,4 @@ def recommend(req: Request):
         "meals": meals,
 
     }
+
