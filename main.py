@@ -53,6 +53,8 @@ class UserInput(BaseModel):
     max_added_sugar_g: float = 8
     target_carbs_per_meal_g: float = 45
     location: str = "Atlanta, GA"
+    store_preference: str = "any"   # <-- NEW
+
 
 class Request(BaseModel):
     user: UserInput
@@ -236,4 +238,5 @@ def recommend(req: Request):
         "meals": meals,
 
     }
+
 
