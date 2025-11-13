@@ -1,8 +1,7 @@
-#line 1
-# api/main.py
+# api/main.py — AwareSync API
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field, conint, confloat
+from pydantic import BaseModel, conint, confloat
 import pandas as pd
 import joblib
 import numpy as np
@@ -15,7 +14,7 @@ app = FastAPI(title="AwareSync API")
 # -----------------------------
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # for local prototype
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -24,13 +23,23 @@ app.add_middleware(
 # -----------------------------
 # Load data + model
 # -----------------------------
-BASE = os.path.dirname(os.path.dirname(__file__))
+ROOT_DIR = os.path.dirname(os.path.dirname(__file__))  # project root
 
-foods = pd.read_csv(os.path.join(BASE, "data", "foods.csv"))
+foods = pd.read_csv(os.path.join(ROOT_DIR, "data", "foods.csv"))
 foods.columns = [c.strip().lower() for c in foods.columns]
-foods["price_per_serving"] = pd.to_numeric(foods["price_per_serving"], errors="coerce").fillna(0)
 
-model = joblib.load(os.path.join(BASE, "model", "model.pkl"))
+# make sure numeric
+for col in [
+    "calories", "carbs_g", "protein_g", "unsat_fat_g", "sat_fat_g",
+    "fiber_g", "sugar_g", "added_sugar_g", "sodium_mg",
+    "price_per_unit", "price_per_serving", "serving_size_g",
+]:
+    if col in foods.columns:
+        foods[col] = pd.to_numeric(foods[col], errors="coerce").fillna(0)
+
+foods["price_per_serving"] = foods["price_per_serving"].fillna(0)
+
+model = joblib.load(os.path.join(ROOT_DIR, "model", "model.pkl"))
 
 # -----------------------------
 # Diet lists
@@ -53,7 +62,7 @@ class UserInput(BaseModel):
     max_added_sugar_g: float = 8
     target_carbs_per_meal_g: float = 45
     location: str = "Atlanta, GA"
-    store_preference: str = "any"   # <-- NEW
+    store_preference: str = "any"  # NEW
 
 
 class Request(BaseModel):
@@ -62,11 +71,11 @@ class Request(BaseModel):
 # -----------------------------
 # Diet Filtering
 # -----------------------------
-def diet_filter(df, diet):
+def diet_filter(df: pd.DataFrame, diet: str) -> pd.DataFrame:
     items = df["item"].str.lower()
 
-    is_meat   = items.str.contains("|".join(WHITE_MEAT_LIST + RED_MEAT_LIST), na=False)
-    is_red    = items.str.contains("|".join(RED_MEAT_LIST), na=False)
+    is_meat = items.str.contains("|".join(WHITE_MEAT_LIST + RED_MEAT_LIST), na=False)
+    is_red = items.str.contains("|".join(RED_MEAT_LIST), na=False)
     is_cheese = items.str.contains("|".join(CHEESE_LIST), na=False)
 
     if diet == "any":
@@ -81,39 +90,54 @@ def diet_filter(df, diet):
     return df
 
 # -----------------------------
-# Additional rules
+# Additional rules (store, sodium, sugar)
 # -----------------------------
-def apply_rules(df, user):
+def apply_rules(df: pd.DataFrame, user: UserInput) -> pd.DataFrame:
     df = diet_filter(df, user.diet)
 
+    # store preference (optional)
     pref = (getattr(user, "store_preference", "") or "").strip().lower()
 
     if pref and pref not in ("any", "no preference", "none"):
         if "store" in df.columns:
-            df = df[df["store"].str.lower().str.contains(pref, na=False)]
+            filtered = df[df["store"].str.lower().str.contains(pref, na=False)]
+            # if nothing matched, fall back to no store filter
+            if not filtered.empty:
+                df = filtered
 
     if user.restrict_low_sodium:
-        df = df[df["sodium_mg"] <= 300]
+        if "sodium_mg" in df.columns:
+            df = df[df["sodium_mg"] <= 300]
 
-    df = df[df["added_sugar_g"] <= user.max_added_sugar_g]
+    if "added_sugar_g" in df.columns:
+        df = df[df["added_sugar_g"] <= user.max_added_sugar_g]
 
     return df.reset_index(drop=True)
 
 # -----------------------------
 # Ranking with Model
 # -----------------------------
-def predict_ranking(df, user):
+FEATURE_COLS = [
+    "category",
+    "calories",
+    "carbs_g",
+    "protein_g",
+    "unsat_fat_g",
+    "sat_fat_g",
+    "fiber_g",
+    "sugar_g",
+    "added_sugar_g",
+    "sodium_mg",
+    "price_per_unit",
+    "price_per_serving",
+    "serving_size_g",
+]
+
+def predict_ranking(df: pd.DataFrame, user: UserInput) -> pd.DataFrame:
     if df.empty:
         return df
 
-    X = df[
-        [
-            "category", "calories", "carbs_g", "protein_g",
-            "unsat_fat_g", "sat_fat_g", "fiber_g", "sugar_g",
-            "added_sugar_g", "sodium_mg", "price_per_unit",
-            "price_per_serving", "serving_size_g"
-        ]
-    ]
+    X = df[FEATURE_COLS]
 
     preds = model.predict(X)
 
@@ -129,13 +153,13 @@ def predict_ranking(df, user):
 
     return out.sort_values(
         ["health_score", "price_per_serving"],
-        ascending=[False, True]
+        ascending=[False, True],
     ).reset_index(drop=True)
 
 # -----------------------------
 # Buckets
 # -----------------------------
-def bucketize(df):
+def bucketize(df: pd.DataFrame):
     veg = df[df["category"] == "veggie"].reset_index(drop=True)
     carbs = df[df["category"].isin(["carbs", "snack"])].reset_index(drop=True)
     prots = df[df["category"] == "protein"].reset_index(drop=True)
@@ -144,13 +168,13 @@ def bucketize(df):
 # -----------------------------
 # Helpers
 # -----------------------------
-def pick_carbs(carb_df, target):
+def pick_carbs(carb_df: pd.DataFrame, target: float):
     if carb_df.empty:
         return None
     idx = (carb_df["carbs_g"] - target).abs().idxmin()
     return carb_df.loc[idx]
 
-def pick_protein(df, diet):
+def pick_protein(df: pd.DataFrame, diet: str):
     if df.empty:
         return None
     items = df["item"].str.lower()
@@ -161,7 +185,7 @@ def pick_protein(df, diet):
         return None
     return df.iloc[0]
 
-def build_plate(veg, carbs, prots, user):
+def build_plate(veg: pd.DataFrame, carbs: pd.DataFrame, prots: pd.DataFrame, user: UserInput):
     v = veg.iloc[0] if not veg.empty else None
     c = pick_carbs(carbs, user.target_carbs_per_meal_g)
     p = pick_protein(prots, user.diet)
@@ -172,7 +196,7 @@ def build_plate(veg, carbs, prots, user):
 # -----------------------------
 # Weekly Meal Planner
 # -----------------------------
-def plan_week(ranked, user):
+def plan_week(ranked: pd.DataFrame, user: UserInput):
     veg, carbs, prots = bucketize(ranked)
 
     total_cost = 0.0
@@ -184,7 +208,6 @@ def plan_week(ranked, user):
         if meal is None:
             break
 
-        # Convert numpy types → Python types
         cost = sum(float(x["price_per_serving"]) for x in meal) * int(user.people)
         cost = float(cost)
 
@@ -211,11 +234,10 @@ def plan_week(ranked, user):
                 "fiber_g": float(x["fiber_g"]),
                 "added_sugar_g": float(x["added_sugar_g"]),
                 "predicted_glycemic_impact": float(x["predicted_glycemic_impact"]),
-                "store": str(x.get("store", "")),
-
+                "store": str(x["store"]) if "store" in x.index else "",
             })
 
-        # rotate using concat
+        # rotate buckets so we don't choose same items in same order every day
         if len(veg) > 1:
             veg = pd.concat([veg.iloc[1:], veg.iloc[:1]], ignore_index=True)
         if len(carbs) > 1:
@@ -230,7 +252,6 @@ def plan_week(ranked, user):
 # -----------------------------
 @app.post("/recommend")
 def recommend(req: Request):
-
     user = req.user
 
     filtered = apply_rules(foods, user)
@@ -244,9 +265,4 @@ def recommend(req: Request):
         "target_carbs_per_meal_g": float(user.target_carbs_per_meal_g),
         "items": items_used,
         "meals": meals,
-
     }
-
-
-
-
