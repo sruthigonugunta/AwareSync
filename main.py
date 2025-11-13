@@ -1,3 +1,4 @@
+#line 1
 # api/main.py
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -233,4 +234,5 @@ def recommend(req: Request):
         "target_carbs_per_meal_g": float(user.target_carbs_per_meal_g),
         "items": items_used,
         "meals": meals,
+
     }
