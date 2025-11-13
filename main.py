@@ -211,6 +211,8 @@ def plan_week(ranked, user):
                 "fiber_g": float(x["fiber_g"]),
                 "added_sugar_g": float(x["added_sugar_g"]),
                 "predicted_glycemic_impact": float(x["predicted_glycemic_impact"]),
+                "store": str(x.get("store", "")),
+
             })
 
         # rotate using concat
@@ -244,6 +246,7 @@ def recommend(req: Request):
         "meals": meals,
 
     }
+
 
 
 
