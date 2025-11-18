@@ -1,5 +1,3 @@
-scripts/main.py
-
 # api/main.py — AwareSync API
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -291,5 +289,6 @@ def events_page(request: Request):
         "events.html",
         {"request": request, "events": data}
     )
+
 
 
