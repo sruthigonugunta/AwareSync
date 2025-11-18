@@ -9,11 +9,14 @@ import os
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
 from fastapi import Request
+# -----------------------------
+# Setup: Define ROOT_DIR first
+# -----------------------------
+ROOT_DIR = os.path.dirname(os.path.dirname(__file__)) # project root
 
 templates = Jinja2Templates(directory=os.path.join(ROOT_DIR, "templates"))
 
 app = FastAPI(title="AwareSync API")
-
 # -----------------------------
 # CORS
 # -----------------------------
@@ -28,7 +31,6 @@ app.add_middleware(
 # -----------------------------
 # Load data + model
 # -----------------------------
-ROOT_DIR = os.path.dirname(os.path.dirname(__file__))  # project root
 
 foods = pd.read_csv(os.path.join(ROOT_DIR, "data", "foods.csv"))
 foods.columns = [c.strip().lower() for c in foods.columns]
@@ -70,7 +72,7 @@ class UserInput(BaseModel):
     store_preference: str = "any"  # NEW
 
 
-class Request(BaseModel):
+class RecommendRequest(BaseModel): # Renamed from Request
     user: UserInput
 
 # -----------------------------
@@ -256,9 +258,8 @@ def plan_week(ranked: pd.DataFrame, user: UserInput):
 # API Endpoint
 # -----------------------------
 @app.post("/recommend")
-def recommend(req: Request):
+def recommend(req: RecommendRequest): # Use the new Pydantic class name
     user = req.user
-
     filtered = apply_rules(foods, user)
     ranked = predict_ranking(filtered, user)
 
@@ -271,24 +272,15 @@ def recommend(req: Request):
         "items": items_used,
         "meals": meals,
     }
+
 @app.get("/resources", response_class=HTMLResponse)
-def resources_page(request: Request):
+def resources_page(request: Request): # 'Request' here is the original imported FastAPI Request object
     df = pd.read_csv(os.path.join(ROOT_DIR, "data", "resources.csv"))
     data = df.to_dict(orient="records")
     return templates.TemplateResponse(
         "resources.html",
         {"request": request, "resources": data}
-    )
-
-
-@app.get("/events", response_class=HTMLResponse)
-def events_page(request: Request):
-    df = pd.read_csv(os.path.join(ROOT_DIR, "data", "events.csv"))
-    data = df.to_dict(orient="records")
-    return templates.TemplateResponse(
+    )s.TemplateResponse(
         "events.html",
         {"request": request, "events": data}
     )
-
-
-
