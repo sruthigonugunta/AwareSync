@@ -6,6 +6,11 @@ import pandas as pd
 import joblib
 import numpy as np
 import os
+from fastapi.templating import Jinja2Templates
+from fastapi.responses import HTMLResponse
+from fastapi import Request
+
+templates = Jinja2Templates(directory=os.path.join(ROOT_DIR, "templates"))
 
 app = FastAPI(title="AwareSync API")
 
@@ -266,3 +271,22 @@ def recommend(req: Request):
         "items": items_used,
         "meals": meals,
     }
+@app.get("/resources", response_class=HTMLResponse)
+def resources_page(request: Request):
+    df = pd.read_csv(os.path.join(ROOT_DIR, "data", "resources.csv"))
+    data = df.to_dict(orient="records")
+    return templates.TemplateResponse(
+        "resources.html",
+        {"request": request, "resources": data}
+    )
+
+
+@app.get("/events", response_class=HTMLResponse)
+def events_page(request: Request):
+    df = pd.read_csv(os.path.join(ROOT_DIR, "data", "events.csv"))
+    data = df.to_dict(orient="records")
+    return templates.TemplateResponse(
+        "events.html",
+        {"request": request, "events": data}
+    )
+
