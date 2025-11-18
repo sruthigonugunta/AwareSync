@@ -1,0 +1,55 @@
+def plan_week(ranked: pd.DataFrame, user: UserInput):
+    veg, carbs, prots = bucketize(ranked)
+
+    total_cost = 0.0
+    items_used = []
+    meals = []
+
+    for day in range(1, 8):
+        day_meals = {}
+
+        for meal_name in ["breakfast", "lunch", "dinner"]:
+            meal = build_plate(veg, carbs, prots, user)
+            if meal is None:
+                break
+
+            # cost
+            cost = sum(float(x["price_per_serving"]) for x in meal) * int(user.people)
+            if total_cost + cost > user.budget:
+                break
+
+            total_cost += cost
+
+            # save meal
+            day_meals[meal_name] = [str(x["item"]) for x in meal]
+
+            # log items
+            for x in meal:
+                items_used.append({
+                    "item": str(x["item"]),
+                    "category": str(x["category"]),
+                    "price_per_serving": float(x["price_per_serving"]),
+                    "carbs_g": float(x["carbs_g"]),
+                    "protein_g": float(x["protein_g"]),
+                    "fat_g": float(x["sat_fat_g"] + x["unsat_fat_g"]),
+                    "fiber_g": float(x["fiber_g"]),
+                    "added_sugar_g": float(x["added_sugar_g"]),
+                    "predicted_glycemic_impact": float(x["predicted_glycemic_impact"]),
+                    "store": str(x["store"]) if "store" in x.index else "",
+                })
+
+            # rotate after EACH meal so next one is different
+            if len(veg) > 1:
+                veg = pd.concat([veg.iloc[1:], veg.iloc[:1]], ignore_index=True)
+            if len(carbs) > 1:
+                carbs = pd.concat([carbs.iloc[1:], carbs.iloc[:1]], ignore_index=True)
+            if len(prots) > 1:
+                prots = pd.concat([prots.iloc[1:], prots.iloc[:1]], ignore_index=True)
+
+        # only add day if all meals were generated
+        if len(day_meals) == 3:
+            meals.append({"day": day, **day_meals})
+        else:
+            break
+
+    return float(total_cost), items_used, meals
