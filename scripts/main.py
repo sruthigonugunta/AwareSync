@@ -6,17 +6,9 @@ import pandas as pd
 import joblib
 import numpy as np
 import os
-from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse
-from fastapi import Request
-# -----------------------------
-# Setup: Define ROOT_DIR first
-# -----------------------------
-ROOT_DIR = os.path.dirname(os.path.dirname(__file__)) # project root
-
-templates = Jinja2Templates(directory=os.path.join(ROOT_DIR, "templates"))
 
 app = FastAPI(title="AwareSync API")
+
 # -----------------------------
 # CORS
 # -----------------------------
@@ -29,10 +21,16 @@ app.add_middleware(
 )
 
 # -----------------------------
-# Load data + model
+# Paths
 # -----------------------------
+ROOT_DIR = os.path.dirname(os.path.dirname(__file__))  # project root
+DATA_DIR = os.path.join(ROOT_DIR, "data")
+MODEL_DIR = os.path.join(ROOT_DIR, "model")
 
-foods = pd.read_csv(os.path.join(ROOT_DIR, "data", "foods.csv"))
+# -----------------------------
+# Load foods data + model
+# -----------------------------
+foods = pd.read_csv(os.path.join(DATA_DIR, "foods.csv"), encoding="latin1")
 foods.columns = [c.strip().lower() for c in foods.columns]
 
 # make sure numeric
@@ -46,14 +44,28 @@ for col in [
 
 foods["price_per_serving"] = foods["price_per_serving"].fillna(0)
 
-model = joblib.load(os.path.join(ROOT_DIR, "model", "model.pkl"))
+model = joblib.load(os.path.join(MODEL_DIR, "model.pkl"))
+
+# -----------------------------
+# Load events + resources data
+# -----------------------------
+events_df = pd.read_csv(os.path.join(DATA_DIR, "events.csv"), encoding="latin1")
+events_df.columns = [c.strip().lower() for c in events_df.columns]
+
+resources_df = pd.read_csv(os.path.join(DATA_DIR, "resources.csv"), encoding="latin1")
+resources_df.columns = [c.strip().lower() for c in resources_df.columns]
 
 # -----------------------------
 # Diet lists
 # -----------------------------
-WHITE_MEAT_LIST = ["chicken", "shrimp", "salmon","fish", "turkey"]
+WHITE_MEAT_LIST = ["chicken", "shrimp", "salmon", "fish", "turkey"]
 RED_MEAT_LIST   = ["beef", "pork", "meat", "sausage", "hamburger"]
-CHEESE_LIST     = ["paneer", "ricotta", "gorgonzola", "cheese", "pizza", "milk", "yogurt", "ice cream", "cake", "chocolate", "mozzerella", "chedder", "colby jack", "pepper jack", "gouda", "colby pepper jack", "parmesan", "feta", "Prosciutto", "sour cream", "whipped cream"]
+CHEESE_LIST     = [
+    "paneer", "ricotta", "gorgonzola", "cheese", "pizza", "milk", "yogurt",
+    "ice cream", "cake", "chocolate", "mozzerella", "chedder", "colby jack",
+    "pepper jack", "gouda", "colby pepper jack", "parmesan", "feta",
+    "prosciutto", "sour cream", "whipped cream"
+]
 
 # -----------------------------
 # Pydantic Models
@@ -69,10 +81,10 @@ class UserInput(BaseModel):
     max_added_sugar_g: float = 8
     target_carbs_per_meal_g: float = 45
     location: str = "Atlanta, GA"
-    store_preference: str = "any"  # NEW
+    store_preference: str = "any"  # store filter
 
 
-class RecommendRequest(BaseModel): # Renamed from Request
+class Request(BaseModel):
     user: UserInput
 
 # -----------------------------
@@ -112,9 +124,8 @@ def apply_rules(df: pd.DataFrame, user: UserInput) -> pd.DataFrame:
             if not filtered.empty:
                 df = filtered
 
-    if user.restrict_low_sodium:
-        if "sodium_mg" in df.columns:
-            df = df[df["sodium_mg"] <= 300]
+    if user.restrict_low_sodium and "sodium_mg" in df.columns:
+        df = df[df["sodium_mg"] <= 300]
 
     if "added_sugar_g" in df.columns:
         df = df[df["added_sugar_g"] <= user.max_added_sugar_g]
@@ -145,7 +156,6 @@ def predict_ranking(df: pd.DataFrame, user: UserInput) -> pd.DataFrame:
         return df
 
     X = df[FEATURE_COLS]
-
     preds = model.predict(X)
 
     out = df.copy()
@@ -194,8 +204,8 @@ def pick_protein(df: pd.DataFrame, diet: str):
 
 def build_plate(veg: pd.DataFrame, carbs: pd.DataFrame, prots: pd.DataFrame, user: UserInput):
     v = veg.iloc[0] if not veg.empty else None
-    c = pick_carbs(carbs, user.target_carbs_per_meal_g)
-    p = pick_protein(prots, user.diet)
+    c = pick_carbs(carb_df=carbs, target=user.target_carbs_per_meal_g)
+    p = pick_protein(df=prots, diet=user.diet)
     if v is None or c is None or p is None:
         return None
     return [v, p, c]
@@ -255,11 +265,12 @@ def plan_week(ranked: pd.DataFrame, user: UserInput):
     return float(total_cost), items_used, meals
 
 # -----------------------------
-# API Endpoint
+# API Endpoint: meal plan
 # -----------------------------
 @app.post("/recommend")
-def recommend(req: RecommendRequest): # Use the new Pydantic class name
+def recommend(req: Request):
     user = req.user
+
     filtered = apply_rules(foods, user)
     ranked = predict_ranking(filtered, user)
 
@@ -273,14 +284,24 @@ def recommend(req: RecommendRequest): # Use the new Pydantic class name
         "meals": meals,
     }
 
-@app.get("/resources", response_class=HTMLResponse)
-def resources_page(request: Request): # 'Request' here is the original imported FastAPI Request object
-    df = pd.read_csv(os.path.join(ROOT_DIR, "data", "resources.csv"))
-    data = df.to_dict(orient="records")
-    return templates.TemplateResponse(
-        "resources.html",
-        {"request": request, "resources": data}
-    )s.TemplateResponse(
-        "events.html",
-        {"request": request, "events": data}
-    )
+# -----------------------------
+# API Endpoint: community events
+# -----------------------------
+@app.get("/events")
+def get_events():
+    """
+    Return community events (from events.csv) as a list of records.
+    Expected columns (lowercase): title, date, time, location, organizer, description
+    """
+    return events_df.to_dict(orient="records")
+
+# -----------------------------
+# API Endpoint: resources
+# -----------------------------
+@app.get("/resources")
+def get_resources():
+    """
+    Return diabetes-related resources (from resources.csv) as a list of records.
+    Expected columns (lowercase): name, category, address, contact, website, notes
+    """
+    return resources_df.to_dict(orient="records")
